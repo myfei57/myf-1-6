@@ -215,7 +215,11 @@ export function EthicsPanel({ selectedRobotId }: EthicsPanelProps) {
                       指令权重分配
                       <span
                         className={`ml-2 font-mono ${
-                          totalWeight === 100 ? 'text-neon-green' : 'text-neon-red'
+                          totalWeight === 100
+                            ? 'text-neon-green'
+                            : totalWeight === 0
+                            ? 'text-neon-red'
+                            : 'text-neon-orange'
                         }`}
                       >
                         {totalWeight}/100
@@ -228,6 +232,31 @@ export function EthicsPanel({ selectedRobotId }: EthicsPanelProps) {
                       重置默认
                     </button>
                   </div>
+
+                  {totalWeight === 0 && (
+                    <div className="mb-4 p-3 bg-neon-red/10 border border-neon-red/30 rounded-lg text-xs text-neon-red flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-0.5">所有权重为零！</p>
+                        <p className="text-neon-red/80">
+                          机器人无法进行伦理决策，将按默认流程执行任务，信任度会下降。
+                          请至少为一项指令分配权重。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {totalWeight > 0 && totalWeight !== 100 && (
+                    <div className="mb-4 p-3 bg-neon-orange/10 border border-neon-orange/30 rounded-lg text-xs text-neon-orange flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold mb-0.5">权重未校准</p>
+                        <p className="text-neon-orange/80">
+                          建议将四项权重总和调整为 100，以获得最佳决策效果。
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-4">
                     {DIRECTIVE_CONFIGS.map((cfg) => {
@@ -285,9 +314,9 @@ export function EthicsPanel({ selectedRobotId }: EthicsPanelProps) {
           <h3 className="font-display font-bold text-neon-cyan flex items-center gap-2">
             <FileText className="w-5 h-5" />
             伦理冲突日志
-            {conflictLogs.length > 0 && (
+            {selectedRobot && robotLogs.length > 0 && (
               <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-neon-cyan/20 text-neon-cyan">
-                {conflictLogs.length}
+                {robotLogs.length}
               </span>
             )}
           </h3>
@@ -300,7 +329,13 @@ export function EthicsPanel({ selectedRobotId }: EthicsPanelProps) {
 
         {showLogs && (
           <div className="mt-4 space-y-3">
-            {conflictLogs.length === 0 ? (
+            {!selectedRobot ? (
+              <div className="text-center py-4 text-white/30">
+                <Bot className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">请先选择一台机器人</p>
+                <p className="text-xs mt-1">选择后将显示该机器人的冲突记录</p>
+              </div>
+            ) : robotLogs.length === 0 ? (
               <div className="text-center py-4 text-white/30">
                 <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">暂无冲突记录</p>
@@ -308,7 +343,7 @@ export function EthicsPanel({ selectedRobotId }: EthicsPanelProps) {
               </div>
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
-                {[...conflictLogs].reverse().map((log) => (
+                {robotLogs.map((log) => (
                   <ConflictLogItem
                     key={log.id}
                     log={log}

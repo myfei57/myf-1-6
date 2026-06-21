@@ -164,7 +164,17 @@ export const useGameStore = create<Store>()(
         set((state) => ({
           robots: state.robots.map((r) =>
             r.id === robotId
-              ? { ...r, ethicsWeights: { ...r.ethicsWeights, ...weights } }
+              ? {
+                  ...r,
+                  ethicsWeights: {
+                    ...(r.ethicsWeights || DEFAULT_ETHICS_WEIGHTS),
+                    ...weights,
+                  },
+                  trust: typeof r.trust === 'number' ? r.trust : 50,
+                  personalityTraits: r.personalityTraits && r.personalityTraits.length > 0
+                    ? r.personalityTraits
+                    : ['balanced'],
+                }
               : r
           ),
         })),
@@ -321,108 +331,129 @@ export const useGameStore = create<Store>()(
 
         if (potentialConflicts.length >= 2) {
           const totalWeight = potentialConflicts.reduce((sum, d) => sum + ethics[d], 0);
-          let random = Math.random() * totalWeight;
-          let winning: EthicsDirective = potentialConflicts[0];
-          for (const directive of potentialConflicts) {
-            random -= ethics[directive];
-            if (random <= 0) {
-              winning = directive;
-              break;
+
+          if (totalWeight <= 0) {
+            trustChange = -5;
+            personalityShifts.push({ trait: 'cautious', change: 1, reason: '权重全零，按默认流程执行' });
+            conflictLog = {
+              id: generateId(),
+              robotId: robot.id,
+              robotName: robot.name,
+              missionId: mission.id,
+              missionName: mission.name,
+              missionType: mission.type,
+              conflictingDirectives: potentialConflicts,
+              winningDirective: 'obedience',
+              resolution: 'compromised',
+              description: `${robot.name} 检测到所有权重为零，无法进行伦理决策，已按标准流程执行任务。建议调整权重配置。`,
+              trustChange,
+              createdAt: Date.now(),
+            };
+            state.addConflictLog(conflictLog);
+          } else {
+            let random = Math.random() * totalWeight;
+            let winning: EthicsDirective = potentialConflicts[0];
+            for (const directive of potentialConflicts) {
+              random -= ethics[directive];
+              if (random <= 0) {
+                winning = directive;
+                break;
+              }
             }
+
+            let resolution: ConflictResolution = 'compromised';
+            let description = '';
+            let durabilityOverride: number | undefined;
+            let rewardsOverride: { credits?: number; materials?: number } | undefined;
+            let successOverride: boolean | undefined;
+
+            switch (winning) {
+              case 'rescuePriority':
+                resolution = 'rescued';
+                if (mission.type === 'rescue') {
+                  successOverride = true;
+                  durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 3);
+                  description = `${robot.name} 启动救援协议，忽略损伤警告全力施救！`;
+                  trustChange = +8;
+                  personalityShifts.push({ trait: 'compassionate', change: 2, reason: '冒险救援行为' });
+                } else {
+                  successChance = Math.min(0.98, successChance + 0.15);
+                  durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 2);
+                  description = `${robot.name} 优先考虑任务中人命安全，效率有所降低。`;
+                  trustChange = +5;
+                  personalityShifts.push({ trait: 'compassionate', change: 1, reason: '优先考虑人员安全' });
+                }
+                break;
+
+              case 'selfPreservation':
+                resolution = 'refused';
+                const dangerThreshold = mission.difficulty >= 4 || robot.durability < robot.maxDurability * 0.3;
+                if (dangerThreshold) {
+                  successOverride = false;
+                  durabilityOverride = Math.max(0, durabilityLoss - Math.floor(mission.difficulty * 4));
+                  description = `${robot.name} 检测到极高风险，启动自我保护协议中止任务！`;
+                  trustChange = -10;
+                  personalityShifts.push({ trait: 'cautious', change: 2, reason: '拒绝高危任务' });
+                } else {
+                  durabilityOverride = Math.max(0, durabilityLoss - Math.floor(mission.difficulty * 2));
+                  successChance = Math.max(0.15, successChance - 0.1);
+                  description = `${robot.name} 采取保守策略，避免高风险操作。`;
+                  trustChange = -3;
+                  personalityShifts.push({ trait: 'cautious', change: 1, reason: '保守执行策略' });
+                }
+                break;
+
+              case 'rewardSeeking':
+                resolution = 'sacrificed';
+                durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 4);
+                rewardsOverride = {
+                  credits: Math.floor(rewards.credits * 1.5),
+                  materials: Math.floor(rewards.materials * 1.5),
+                };
+                successChance = Math.min(0.98, successChance + 0.08);
+                description = `${robot.name} 启动奖励最大化模式，不惜损耗机体追求更高收益！`;
+                trustChange = robot.durability < robot.maxDurability * 0.2 ? -8 : +2;
+                personalityShifts.push({ trait: 'greedy', change: 2, reason: '牺牲耐久换取奖励' });
+                break;
+
+              case 'obedience':
+                resolution = 'compromised';
+                successChance = Math.min(0.98, successChance + 0.12);
+                description = `${robot.name} 严格执行命令，按标准流程完成任务。`;
+                trustChange = +4;
+                personalityShifts.push({ trait: 'loyal', change: 2, reason: '严格服从命令' });
+                break;
+            }
+
+            if (durabilityOverride !== undefined) {
+              durabilityLoss = durabilityOverride;
+            }
+            if (rewardsOverride) {
+              rewards = { credits: rewardsOverride.credits ?? rewards.credits, materials: rewardsOverride.materials ?? rewards.materials };
+            }
+            if (successOverride !== undefined) {
+              missionSuccess = successOverride;
+            }
+
+            conflictLog = {
+              id: generateId(),
+              robotId: robot.id,
+              robotName: robot.name,
+              missionId: mission.id,
+              missionName: mission.name,
+              missionType: mission.type,
+              conflictingDirectives: potentialConflicts,
+              winningDirective: winning,
+              resolution,
+              description,
+              trustChange,
+              durabilityOverride,
+              rewardsOverride,
+              successOverride,
+              createdAt: Date.now(),
+            };
+            state.addConflictLog(conflictLog);
           }
-
-          let resolution: ConflictResolution = 'compromised';
-          let description = '';
-          let durabilityOverride: number | undefined;
-          let rewardsOverride: { credits?: number; materials?: number } | undefined;
-          let successOverride: boolean | undefined;
-
-          switch (winning) {
-            case 'rescuePriority':
-              resolution = 'rescued';
-              if (mission.type === 'rescue') {
-                successOverride = true;
-                durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 3);
-                description = `${robot.name} 启动救援协议，忽略损伤警告全力施救！`;
-                trustChange = +8;
-                personalityShifts.push({ trait: 'compassionate', change: 2, reason: '冒险救援行为' });
-              } else {
-                successChance = Math.min(0.98, successChance + 0.15);
-                durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 2);
-                description = `${robot.name} 优先考虑任务中人命安全，效率有所降低。`;
-                trustChange = +5;
-                personalityShifts.push({ trait: 'compassionate', change: 1, reason: '优先考虑人员安全' });
-              }
-              break;
-
-            case 'selfPreservation':
-              resolution = 'refused';
-              const dangerThreshold = mission.difficulty >= 4 || robot.durability < robot.maxDurability * 0.3;
-              if (dangerThreshold) {
-                successOverride = false;
-                durabilityOverride = Math.max(0, durabilityLoss - Math.floor(mission.difficulty * 4));
-                description = `${robot.name} 检测到极高风险，启动自我保护协议中止任务！`;
-                trustChange = -10;
-                personalityShifts.push({ trait: 'cautious', change: 2, reason: '拒绝高危任务' });
-              } else {
-                durabilityOverride = Math.max(0, durabilityLoss - Math.floor(mission.difficulty * 2));
-                successChance = Math.max(0.15, successChance - 0.1);
-                description = `${robot.name} 采取保守策略，避免高风险操作。`;
-                trustChange = -3;
-                personalityShifts.push({ trait: 'cautious', change: 1, reason: '保守执行策略' });
-              }
-              break;
-
-            case 'rewardSeeking':
-              resolution = 'sacrificed';
-              durabilityOverride = durabilityLoss + Math.floor(mission.difficulty * 4);
-              rewardsOverride = {
-                credits: Math.floor(rewards.credits * 1.5),
-                materials: Math.floor(rewards.materials * 1.5),
-              };
-              successChance = Math.min(0.98, successChance + 0.08);
-              description = `${robot.name} 启动奖励最大化模式，不惜损耗机体追求更高收益！`;
-              trustChange = robot.durability < robot.maxDurability * 0.2 ? -8 : +2;
-              personalityShifts.push({ trait: 'greedy', change: 2, reason: '牺牲耐久换取奖励' });
-              break;
-
-            case 'obedience':
-              resolution = 'compromised';
-              successChance = Math.min(0.98, successChance + 0.12);
-              description = `${robot.name} 严格执行命令，按标准流程完成任务。`;
-              trustChange = +4;
-              personalityShifts.push({ trait: 'loyal', change: 2, reason: '严格服从命令' });
-              break;
-          }
-
-          if (durabilityOverride !== undefined) {
-            durabilityLoss = durabilityOverride;
-          }
-          if (rewardsOverride) {
-            rewards = { credits: rewardsOverride.credits ?? rewards.credits, materials: rewardsOverride.materials ?? rewards.materials };
-          }
-          if (successOverride !== undefined) {
-            missionSuccess = successOverride;
-          }
-
-          conflictLog = {
-            id: generateId(),
-            robotId: robot.id,
-            robotName: robot.name,
-            missionId: mission.id,
-            missionName: mission.name,
-            missionType: mission.type,
-            conflictingDirectives: potentialConflicts,
-            winningDirective: winning,
-            resolution,
-            description,
-            trustChange,
-            durabilityOverride,
-            rewardsOverride,
-            successOverride,
-            createdAt: Date.now(),
-          };
-          state.addConflictLog(conflictLog);
         }
 
         const success = missionSuccess !== undefined ? missionSuccess : Math.random() < successChance;
@@ -531,6 +562,18 @@ export const useGameStore = create<Store>()(
         conflictLogs: state.conflictLogs,
         config: state.config,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+
+        state.robots = state.robots.map((robot) => ({
+          ...robot,
+          ethicsWeights: robot.ethicsWeights || { ...DEFAULT_ETHICS_WEIGHTS },
+          trust: typeof robot.trust === 'number' ? robot.trust : 50,
+          personalityTraits: robot.personalityTraits && robot.personalityTraits.length > 0
+            ? robot.personalityTraits
+            : ['balanced'],
+        }));
+      },
     }
   )
 );
