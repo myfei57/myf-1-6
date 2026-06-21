@@ -17,15 +17,18 @@ import {
   AlertTriangle,
   RotateCcw,
   History,
+  Handshake,
+  Sparkles as SparklesIcon,
 } from 'lucide-react';
 import { PageContainer } from '../components/PageContainer';
 import { RobotCard } from '../components/RobotCard';
 import { StatBar } from '../components/StatBar';
 import { Modal } from '../components/Modal';
+import { EthicsPanel } from '../components/EthicsPanel';
 import { useGameStore } from '../store/useGameStore';
 import { MISSIONS } from '../data/defaultConfig';
 import { formatDate } from '../utils/helpers';
-import type { MissionType, Robot, Mission, MissionRecord } from '../types';
+import type { MissionType, Robot, Mission, MissionRecord, PersonalityShift, ConflictLog } from '../types';
 
 const missionIcons: Record<MissionType, typeof Package> = {
   transport: Truck,
@@ -71,6 +74,7 @@ export function MissionsPage() {
 
   const robots = useGameStore((s) => s.robots);
   const missionRecords = useGameStore((s) => s.missionRecords);
+  const conflictLogs = useGameStore((s) => s.conflictLogs);
   const calculateAdaptability = useGameStore((s) => s.calculateAdaptability);
   const executeMission = useGameStore((s) => s.executeMission);
   const config = useGameStore((s) => s.config);
@@ -103,7 +107,7 @@ export function MissionsPage() {
   return (
     <PageContainer
       title="任务派遣"
-      subtitle={`可用机器人: ${availableRobots.length} | 已完成任务: ${missionRecords.filter((r) => r.success).length}`}
+      subtitle={`可用机器人: ${availableRobots.length} | 已完成任务: ${missionRecords.filter((r) => r.success).length} | 冲突记录: ${conflictLogs.length}`}
       actions={
         <button onClick={() => setShowHistory(true)} className="btn btn-secondary">
           <History className="w-4 h-4 mr-2" />
@@ -111,8 +115,8 @@ export function MissionsPage() {
         </button>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <div className="xl:col-span-4">
           <h3 className="font-display font-bold text-neon-blue mb-4 flex items-center gap-2">
             <Swords className="w-5 h-5" />
             可用任务
@@ -199,7 +203,7 @@ export function MissionsPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-7">
+        <div className="xl:col-span-4">
           {selectedMission ? (
             <div className="space-y-4">
               <div className="card p-4">
@@ -317,62 +321,131 @@ export function MissionsPage() {
               )}
 
               <AnimatePresence>
-                {missionResult && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className={`card p-6 text-center ${
-                      missionResult.success
-                        ? 'border-neon-green/50'
-                        : 'border-neon-red/50'
-                    }`}
-                  >
-                    {missionResult.success ? (
-                      <>
-                        <Trophy className="w-16 h-16 mx-auto mb-4 text-neon-orange" />
-                        <h3 className="font-display text-2xl font-bold text-neon-green mb-2 glow-text-green">
-                          任务成功！
-                        </h3>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-16 h-16 mx-auto mb-4 text-neon-red" />
-                        <h3 className="font-display text-2xl font-bold text-neon-red mb-2 glow-text-red">
-                          任务失败
-                        </h3>
-                      </>
-                    )}
+                {missionResult && (() => {
+                  const relatedLog: ConflictLog | undefined = missionResult.conflictLogId
+                    ? conflictLogs.find((l) => l.id === missionResult.conflictLogId)
+                    : undefined;
+                  const trustChange = missionResult.trustChange || 0;
+                  const shifts = missionResult.personalityShifts || [];
 
-                    <p className="text-white/50 mb-4">
-                      适配度: {missionResult.adaptability}% | 耐久损耗: -{missionResult.durabilityLoss}
-                    </p>
-
-                    {missionResult.success && (
-                      <div className="flex items-center justify-center gap-6 mb-4">
-                        <div className="text-center">
-                          <p className="text-sm text-white/50">信用点</p>
-                          <p className="font-mono font-bold text-xl text-neon-orange">
-                            +{missionResult.rewards.credits}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-white/50">材料</p>
-                          <p className="font-mono font-bold text-xl text-neon-green">
-                            +{missionResult.rewards.materials}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => setMissionResult(null)}
-                      className="btn btn-secondary"
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className={`card p-6 text-center ${
+                        missionResult.success
+                          ? 'border-neon-green/50'
+                          : 'border-neon-red/50'
+                      }`}
                     >
-                      继续
-                    </button>
-                  </motion.div>
-                )}
+                      {missionResult.success ? (
+                        <>
+                          <Trophy className="w-16 h-16 mx-auto mb-4 text-neon-orange" />
+                          <h3 className="font-display text-2xl font-bold text-neon-green mb-2 glow-text-green">
+                            任务成功！
+                          </h3>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-16 h-16 mx-auto mb-4 text-neon-red" />
+                          <h3 className="font-display text-2xl font-bold text-neon-red mb-2 glow-text-red">
+                            任务失败
+                          </h3>
+                        </>
+                      )}
+
+                      <p className="text-white/50 mb-4">
+                        适配度: {missionResult.adaptability}% | 耐久损耗: -{missionResult.durabilityLoss}
+                      </p>
+
+                      {relatedLog && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4 p-3 bg-background-tertiary rounded-lg text-left"
+                        >
+                          <p className="text-xs font-bold text-neon-purple mb-1 flex items-center gap-1">
+                            <SparklesIcon className="w-3 h-3" />
+                            伦理决策
+                          </p>
+                          <p className="text-sm text-white/80">{relatedLog.description}</p>
+                        </motion.div>
+                      )}
+
+                      {missionResult.success && (
+                        <div className="flex items-center justify-center gap-6 mb-4">
+                          <div className="text-center">
+                            <p className="text-sm text-white/50">信用点</p>
+                            <p className="font-mono font-bold text-xl text-neon-orange">
+                              +{missionResult.rewards.credits}
+                            </p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-white/50">材料</p>
+                            <p className="font-mono font-bold text-xl text-neon-green">
+                              +{missionResult.rewards.materials}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(trustChange !== 0 || shifts.length > 0) && (
+                        <div className="mb-4 space-y-3 pt-3 border-t border-border-subtle">
+                          {trustChange !== 0 && (
+                            <div className="flex items-center justify-center gap-2">
+                              <Handshake
+                                className={`w-4 h-4 ${
+                                  trustChange > 0 ? 'text-neon-green' : 'text-neon-red'
+                                }`}
+                              />
+                              <span className="text-sm text-white/70">信任度变化</span>
+                              <span
+                                className={`font-mono font-bold ${
+                                  trustChange > 0
+                                    ? 'text-neon-green'
+                                    : 'text-neon-red'
+                                }`}
+                              >
+                                {trustChange > 0 ? '+' : ''}
+                                {trustChange}
+                              </span>
+                            </div>
+                          )}
+
+                          {shifts.length > 0 && (
+                            <div>
+                              <p className="text-xs text-white/50 mb-2">性格倾向变化</p>
+                              <div className="flex flex-wrap justify-center gap-2">
+                                {shifts.map((s: PersonalityShift, i: number) => (
+                                  <span
+                                    key={i}
+                                    className="text-xs px-2 py-1 rounded-full bg-neon-purple/20 text-neon-purple"
+                                  >
+                                    +{s.change} {
+                                      s.trait === 'compassionate' ? '悲悯' :
+                                      s.trait === 'cautious' ? '谨慎' :
+                                      s.trait === 'greedy' ? '贪婪' :
+                                      s.trait === 'loyal' ? '忠诚' : '中立'
+                                    }
+                                    <span className="text-white/40 ml-1">({s.reason})</span>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => setMissionResult(null)}
+                        className="btn btn-secondary"
+                      >
+                        继续
+                      </button>
+                    </motion.div>
+                  );
+                })()}
               </AnimatePresence>
             </div>
           ) : (
@@ -382,6 +455,10 @@ export function MissionsPage() {
               <p className="text-white/30">从左侧列表中选择要执行的任务</p>
             </div>
           )}
+        </div>
+
+        <div className="xl:col-span-4">
+          <EthicsPanel selectedRobotId={selectedRobot?.id} />
         </div>
       </div>
 

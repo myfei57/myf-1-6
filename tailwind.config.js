@@ -1,8 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 
+const neonColors = ["neon-blue", "neon-green", "neon-orange", "neon-red", "neon-purple", "neon-cyan"];
+
+const safelist = [];
+neonColors.forEach((c) => {
+  safelist.push(`bg-${c}/10`, `bg-${c}/20`, `bg-${c}/30`);
+  safelist.push(`text-${c}`);
+  safelist.push(`ring-${c}`, `ring-1`, `ring-2`);
+  safelist.push(`border-${c}`, `border-${c}/30`, `border-${c}/50`);
+  safelist.push(`shadow-${c}`);
+  safelist.push(`glow-text-${c.split('-')[1]}`);
+});
+
 export default {
   darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  safelist,
   theme: {
     container: {
       center: true,

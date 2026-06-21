@@ -4,6 +4,12 @@ export type PartType = 'head' | 'body' | 'arm' | 'leg' | 'core' | 'tool';
 
 export type MissionType = 'transport' | 'cleaning' | 'rescue' | 'combat';
 
+export type EthicsDirective = 'rescuePriority' | 'selfPreservation' | 'rewardSeeking' | 'obedience';
+
+export type ConflictResolution = 'rescued' | 'refused' | 'sacrificed' | 'compromised';
+
+export type PersonalityTrait = 'compassionate' | 'cautious' | 'greedy' | 'loyal' | 'balanced';
+
 export interface Part {
   id: string;
   name: string;
@@ -34,6 +40,40 @@ export interface Robot {
   compatibilityIssues: string[];
   activeSetBonuses: string[];
   createdAt: number;
+  ethicsWeights: EthicsWeights;
+  trust: number;
+  personalityTraits: PersonalityTrait[];
+}
+
+export interface EthicsWeights {
+  rescuePriority: number;
+  selfPreservation: number;
+  rewardSeeking: number;
+  obedience: number;
+}
+
+export interface ConflictLog {
+  id: string;
+  robotId: string;
+  robotName: string;
+  missionId: string;
+  missionName: string;
+  missionType: MissionType;
+  conflictingDirectives: EthicsDirective[];
+  winningDirective: EthicsDirective;
+  resolution: ConflictResolution;
+  description: string;
+  trustChange: number;
+  durabilityOverride?: number;
+  rewardsOverride?: { credits?: number; materials?: number };
+  successOverride?: boolean;
+  createdAt: number;
+}
+
+export interface PersonalityShift {
+  trait: PersonalityTrait;
+  change: number;
+  reason: string;
 }
 
 export interface Mission {
@@ -68,6 +108,9 @@ export interface MissionRecord {
   rewards: { credits: number; materials: number };
   durabilityLoss: number;
   completedAt: number;
+  conflictLogId?: string;
+  trustChange?: number;
+  personalityShifts?: PersonalityShift[];
 }
 
 export interface RepairRecord {
@@ -146,6 +189,7 @@ export interface GameState {
   assemblyPlans: AssemblyPlan[];
   config: GameConfig;
   selectedParts: Record<PartType, Part | null>;
+  conflictLogs: ConflictLog[];
 }
 
 export interface GameActions {
@@ -155,12 +199,14 @@ export interface GameActions {
   addRobot: (robot: Robot) => void;
   removeRobot: (robotId: string) => void;
   updateRobot: (robotId: string, updates: Partial<Robot>) => void;
+  updateRobotEthics: (robotId: string, weights: Partial<EthicsWeights>) => void;
   addCredits: (amount: number) => void;
   spendCredits: (amount: number) => boolean;
   addMaterials: (amount: number) => void;
   spendMaterials: (amount: number) => boolean;
   addMissionRecord: (record: MissionRecord) => void;
   addRepairRecord: (record: RepairRecord) => void;
+  addConflictLog: (log: ConflictLog) => void;
   addAssemblyPlan: (plan: AssemblyPlan) => void;
   removeAssemblyPlan: (planId: string) => void;
   updateConfig: (config: Partial<GameConfig>) => void;

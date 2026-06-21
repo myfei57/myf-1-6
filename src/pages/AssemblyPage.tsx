@@ -36,6 +36,7 @@ import { useGameStore } from '../store/useGameStore';
 import { PART_TYPE_NAMES } from '../data/defaultConfig';
 import { generateId } from '../utils/helpers';
 import type { Part, PartType, Robot } from '../types';
+import { DEFAULT_ETHICS_WEIGHTS } from '../store/useGameStore';
 
 const SLOT_ORDER: PartType[] = ['head', 'body', 'arm', 'leg', 'core', 'tool'];
 
@@ -153,6 +154,9 @@ export function AssemblyPage() {
       durability: stats.maxDurability,
       repairCount: 0,
       createdAt: Date.now(),
+      ethicsWeights: { ...DEFAULT_ETHICS_WEIGHTS },
+      trust: 50,
+      personalityTraits: ['balanced'],
     };
 
     addRobot(newRobot);
